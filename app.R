@@ -29,9 +29,10 @@ section_tab <- function(k, heading = SECTION_DEFAULT_HEADINGS[[k]], custom = FAL
     uiOutput(paste0("blocks_", k)),
     div(class = "add-row",
       span(class = "add-label", "Add:"),
-      lapply(names(QUICK_TYPES), function(nm) tags$button(type = "button", class = "btn btn-outline-primary btn-sm quick-add",
-        onclick = sprintf("Shiny.setInputValue('quick_add', {key:'%s', type:'%s', t:Date.now()}, {priority:'event'})", k, QUICK_TYPES[[nm]]),
-        icon("plus"), nm)),
+      { qt <- quick_types_for(k)
+        lapply(names(qt), function(nm) tags$button(type = "button", class = "btn btn-outline-primary btn-sm quick-add",
+          onclick = sprintf("Shiny.setInputValue('quick_add', {key:'%s', type:'%s', t:Date.now()}, {priority:'event'})", k, qt[[nm]]),
+          icon("plus"), nm)) },
       tags$details(class = "more-types", tags$summary("More\u2026"),
         div(class = "add-more",
           selectInput(paste0("addtype_", k), NULL, BLOCK_TYPES, selected = "callout", width = "230px", selectize = FALSE),
@@ -140,7 +141,7 @@ server <- function(input, output, session) {
       figure = c("caption", "nonumber", "autogrow"), figrow = c("caption", "n", "labels", "label_color", "nonumber", "autogrow"),
       figpair = c("n", "nonumber", "autogrow"),
       figtext = c("text", "caption", "side", "text_boxes", "boxed", "keep_lines", "nonumber", "autogrow"),
-      table = c("caption", "source", "header_mode"), callout = c("title", "text"), qr = c("label"), character(0))
+      table = c("caption", "source", "header_mode"), refs = c("dois", "text", "sort"), callout = c("title", "text"), qr = c("label"), character(0))
     for (f in fields) local({
       ff <- f; on(ff, function(v) {
         if (identical(get_b(id)[[ff]], v)) return()
@@ -182,6 +183,27 @@ server <- function(input, output, session) {
         if (!is.null(rows)) { set_f(id, "grid", rows); bump() }
       })
     }
+    if (b$type == "refs") on("fetch", function(v) {
+      dois <- parse_doi_list(input[[nm("dois")]])
+      if (!length(dois)) { showNotification("Paste one or more DOIs first, e.g. 10.1038/nn1327", type = "warning"); return() }
+      cur <- get_b(id)$text %||% ""
+      have <- tolower(dois) %in% tolower(regmatches(cur, gregexpr("10\\.[^[:space:]]+", cur))[[1]])
+      todo <- dois[!have]; added <- character(0); failed <- character(0)
+      if (length(todo)) withProgress(message = "Looking up DOIs\u2026", value = 0, for (i in seq_along(todo)) {
+        res <- crossref_lookup(todo[i])
+        if (is.null(res)) failed <- c(failed, todo[i]) else added <- c(added, apa_reference_line(crossref_fields(res), todo[i]))
+        incProgress(1 / length(todo))
+      })
+      if (length(added)) {
+        new <- paste(c(if (nzchar(trimws(cur))) trimws(cur), added), collapse = "\n")
+        set_f(id, "text", new); set_f(id, "dois", "")
+        bump(); bump_struct()
+      }
+      msg <- c(if (length(added)) sprintf("Added %d reference%s in APA style. Double-check them, especially title capitalization.", length(added), if (length(added) > 1) "s" else ""),
+               if (sum(have)) sprintf("%d DOI%s already in the list.", sum(have), if (sum(have) > 1) "s were" else " was"),
+               if (length(failed)) sprintf("Couldn't find %s (or no internet connection). You can type %s in by hand.", paste(failed, collapse = ", "), if (length(failed) > 1) "them" else "it"))
+      showNotification(paste(msg, collapse = " "), type = if (length(failed)) "warning" else "message", duration = 10)
+    })
     if (b$type %in% c("qr", "equation")) {
       fld <- if (b$type == "qr") "url" else "latex"
       deb <- debounce(reactive(input[[nm(fld)]]), 900)
@@ -299,6 +321,15 @@ server <- function(input, output, session) {
           opts(numericInput(nm("decimals"), "Decimal places for numbers", b$decimals %||% 2, min = 0, max = 6, width = "160px"),
                p(class = "help", "Empty rows and columns are removed automatically. Up to 40 rows.")))
       },
+      refs = tagList(
+        textAreaInput(nm("dois"), "Paste DOIs (one per line)", b$dois %||% "", rows = 2, width = "100%",
+                      placeholder = "10.1038/nn1327\nhttps://doi.org/10.1126/science.aac4785"),
+        actionButton(nm("fetch"), "Fill in from DOIs", icon = icon("wand-magic-sparkles"), class = "btn-outline-primary btn-sm"),
+        textAreaInput(nm("text"), "References (APA 7th edition, one per line)", b$text %||% "", rows = 6, width = "100%",
+                      placeholder = "Filled in from your DOIs, or type your own:\nYoung, L. J., & Wang, Z. (2004). The neurobiology of pair bonding. *Nature Neuroscience, 7*(10), 1048\u20131054. https://doi.org/10.1038/nn1327"),
+        { tips <- reference_tips(b); if (length(tips)) div(class = "ref-tips", lapply(tips, function(t) div(icon("lightbulb"), " ", t))) },
+        opts(checkboxInput(nm("sort"), "Sort alphabetically by first author (APA)", !identical(b$sort, FALSE)),
+             p(class = "help", "Use *asterisks* for italics (journal name and volume). In your poster text, cite as (Young & Wang, 2004)."))),
       callout = tagList(
         textAreaInput(nm("text"), NULL, b$text, rows = 3, width = "100%", placeholder = "Your take-home message in one or two sentences"),
         opts(textInput(nm("title"), "Callout title", b$title, width = "100%"))),

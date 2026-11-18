@@ -68,6 +68,7 @@ block_is_empty <- function(b, assets) {
     qr = !nzchar(trimws(b$url %||% "")),
     equation = !nzchar(trimws(b$latex %||% "")),
     subheading = !nzchar(trimws(b$text %||% "")),
+    refs = !length(reference_lines(b)),
     flow = !length(flow_steps(b)),
     figtext = is.null(assets[[b$asset %||% ""]]) && !nzchar(trimws(b$text %||% "")),
     TRUE)
@@ -109,6 +110,11 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
     out$boxed <- b$boxed %||% "none"
     out$inset <- if (out$boxed == "none") 0 else BOX_INSET
     out$h <- text_height(out$paras, s, cw - 2 * out$inset) + 2 * out$inset
+  } else if (b$type == "refs") {
+    # APA reference list: one reference per line, hanging indent, A\u2013Z, at the small-text size
+    out$size <- caption_size(s); out$fixed <- FALSE
+    out$paras <- lapply(reference_lines(b), function(l) { p <- parse_rich(l, TRUE)[[1]]; p$bullet <- FALSE; p$hang <- TRUE; p })
+    out$h <- text_height(out$paras, out$size, cw)
   } else if (b$type == "subheading") {
     out$style <- b$style %||% "box"
     out$size <- round(s * 1.25); out$fixed <- FALSE

@@ -150,3 +150,5 @@ details.preview-help summary{cursor:pointer}
 .tgrid-btns .btn{padding:1px 8px;font-size:.78rem;border:1px solid #e3e3e3}
 .inline-pair{display:flex;gap:24px;flex-wrap:wrap}
 .inline-pair .form-group{margin-bottom:6px}
+.ref-tips{font-size:.78rem;color:#7a5a00;background:#fffaf0;border:1px solid #f3e1b0;border-radius:6px;padding:4px 8px;margin:-2px 0 6px}
+.ref-tips div{margin:2px 0}

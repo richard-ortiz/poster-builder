@@ -5,6 +5,7 @@
 # Text is measured with Arial-compatible font metrics so boxes can be auto-fit.
 # ---------------------------------------------------------------------------
 
+HANG_IN <- 0.4        # hanging indent for reference lists (inches)
 LINE_HEIGHT <- 1.2     # line pitch in em (PowerPoint single spacing for Arial ~1.15)
 PARA_SPACE  <- 0.35    # space after each paragraph, in em
 FIT_SAFETY  <- 0.96    # measured widths are inflated slightly so PowerPoint never wraps sooner than we predict
@@ -121,7 +122,7 @@ para_lines <- function(p, size, width) {
   words <- para_words(p)
   if (!length(words)) return(1)
   k <- size / 72 / FIT_SAFETY
-  avail <- width - (if (isTRUE(p$bullet)) size * 1.1 / 72 else 0)
+  avail <- width - (if (isTRUE(p$bullet)) size * 1.1 / 72 else if (isTRUE(p$hang)) HANG_IN else 0)
   if (avail <= 0) return(99)
   ww <- words * k; space_w <- 0.278 * size / 72
   if (sum(ww) + space_w * (length(ww) - 1) <= avail) return(1)
@@ -181,6 +182,8 @@ paras_html <- function(paras, size_px, color = "#000") {
       t
     }, character(1)), collapse = "")
     sty <- sprintf("margin:0 0 %.2fpx 0;", size_px * PARA_SPACE)
+    if (isTRUE(p$hang))
+      return(sprintf('<p style="%spadding-left:%.2fpx;text-indent:-%.2fpx;text-align:left">%s</p>', sty, HANG_IN * PX, HANG_IN * PX, inner))
     if (isTRUE(p$bullet))
       sprintf('<p style="%spadding-left:%.2fpx;text-indent:-%.2fpx">•&nbsp;%s</p>', sty, size_px * 1.1, size_px * 1.1, inner)
     else sprintf('<p style="%s">%s</p>', sty, inner)

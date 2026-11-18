@@ -8,12 +8,13 @@ BLOCK_TYPES <- c("Text" = "text", "Subheading" = "subheading", "Figure" = "figur
                  "Multi-panel figure (A, B\u2026 with one caption)" = "figrow",
                  "Figure + side text" = "figtext", "Flow chart (steps with arrows)" = "flow",
                  "Table (CSV / Excel)" = "table", "Key-finding callout" = "callout",
-                 "QR code" = "qr", "Equation (LaTeX)" = "equation")
+                 "References (APA, from DOIs)" = "refs", "QR code" = "qr", "Equation (LaTeX)" = "equation")
 
 new_block <- function(type, ...) {
   b <- switch(type,
     text     = list(text = "", keep_lines = FALSE, boxed = "none"),
     subheading = list(text = "", style = "box", italic = TRUE),
+    refs     = list(dois = "", text = "", sort = TRUE),
     flow     = list(steps = "", caption = ""),
     figtext  = list(asset = NULL, size = 50, side = "left", text = "", text_boxes = "one", boxed = "dashed", caption = "", keep_lines = FALSE, nonumber = FALSE, autogrow = TRUE),
     figure   = list(asset = NULL, size = 100, caption = "", nonumber = FALSE, autogrow = TRUE),
@@ -53,7 +54,9 @@ SECTION_TIPS <- c(
   results = "Your main findings. Lead with a key-finding callout, then figures and tables with captions.",
   conclusion = "What the results mean and what comes next. Short paragraphs or bullets.",
   ack = "Funding sources, collaborators and facilities. Logos are fine here (tick 'Don't number').",
-  refs = "A few key citations, one per line.")
+  refs = "3\u20136 key sources in APA 7th edition. Add a \u201cReferences (APA)\u201d block and paste DOIs: the citations are filled in for you.")
+# the References tab leads with the APA reference list
+quick_types_for <- function(k) if (identical(k, "refs")) c("References (APA)" = "refs", "Text" = "text", "QR code" = "qr") else QUICK_TYPES
 QUICK_TYPES <- c("Text" = "text", "Figure" = "figure", "Side-by-side figures" = "figpair", "Subheading" = "subheading",
                  "Flow chart" = "flow", "Table" = "table", "Figure + text" = "figtext")
 

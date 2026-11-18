@@ -18,6 +18,7 @@ An R Shiny app that helps students build a 40 × 32 in. conference poster in the
   - **Subheading** inside a panel, in three styles: outlined box, filled red bar, or plain with an underline
   - **Flow chart:** step boxes joined by arrows; wraps into a snake pattern when the panel is narrow
   - **Figure + side text:** image on the left or right, with a dashed, solid or borderless text box beside it
+  - **References (APA 7th edition):** paste DOIs and click "Fill in from DOIs" to look them up on Crossref (same approach as the Ortiz Lab CV Builder). References stay editable, are sorted A–Z with a hanging indent at the small-text size, and come with tips (sentence-case titles, missing DOIs, duplicates).
   - **Key-finding callout box**
   - **QR code** linking to a paper, lab site or data
   - **Equation,** typed in LaTeX

@@ -25,7 +25,8 @@ paras_xml <- function(paras, size, color = "000000", align = "l") {
     p <- paras[[k]]
     spc <- if (k < length(paras)) sprintf('<a:spcAft><a:spcPts val="%d"/></a:spcAft>', round(size * PARA_SPACE * 100)) else ''
     bu <- if (isTRUE(p$bullet)) sprintf('<a:buFont typeface="Arial"/><a:buChar char="•"/>') else '<a:buNone/>'
-    ind <- if (isTRUE(p$bullet)) sprintf(' marL="%s" indent="-%s"', emu(size * 1.1 / 72), emu(size * 1.1 / 72)) else ''
+    ind <- if (isTRUE(p$bullet)) sprintf(' marL="%s" indent="-%s"', emu(size * 1.1 / 72), emu(size * 1.1 / 72))
+           else if (isTRUE(p$hang)) sprintf(' marL="%s" indent="-%s"', emu(HANG_IN), emu(HANG_IN)) else ''
     sprintf('<a:p><a:pPr algn="%s"%s><a:lnSpc><a:spcPct val="100000"/></a:lnSpc>%s%s</a:pPr>%s<a:endParaRPr lang="en-US" sz="%d"/></a:p>',
             align, ind, spc, bu, paste0(vapply(p$runs, run_xml, character(1), size = size, color = color), collapse = ""), round(size * 100))
   }, character(1)), collapse = "")
@@ -123,6 +124,8 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
       if (m$type == "text") {
         if (m$boxed != "none") back <- c(back, frame_xml(m$x, m$y, m$w, m$h, m$boxed))
         front <- c(front, shape_xml("Text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = body_align))
+      } else if (m$type == "refs") {
+        front <- c(front, shape_xml("References", m$x, m$y, m$w, m$h + 0.1, paras = m$paras, size = m$size, align = "l"))
       } else if (m$type == "subheading") {
         st <- m$style
         front <- c(front, shape_xml("Subheading", m$x, m$y, m$w, m$h, geom = if (st == "plain") "rect" else "roundRect",

@@ -72,6 +72,8 @@ preview_html <- function(proj, lay) {
       if (m$type == "text") {
         if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(m$x, m$y, m$w, m$h)))
         add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = body_align))
+      } else if (m$type == "refs") {
+        add(text_div(m$paras, m$size, m$x, m$y, m$w, align = "left"))
       } else if (m$type == "subheading") {
         cls <- paste0("psub psub-", m$style)
         add(sprintf('<div class="%s" style="%sfont-size:%.2fpx;padding:0 %s;">%s</div>', cls, box_style(m$x, m$y, m$w, m$h), fpx(m$size), px(m$inset),
