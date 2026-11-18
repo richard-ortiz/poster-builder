@@ -19,7 +19,8 @@ new_block <- function(type, ...) {
     figure   = list(asset = NULL, size = 100, caption = "", nonumber = FALSE, autogrow = TRUE),
     figrow   = list(assets = list(), n = 2, size = 100, caption = "", labels = TRUE, label_color = "black", nonumber = FALSE, autogrow = TRUE),
     figpair  = list(assets = list(), n = 2, size = 100, captions = list("", "", ""), nonumber = FALSE, autogrow = TRUE),
-    table    = list(asset = NULL, size = 100, caption = "", decimals = 2),
+    table    = list(source = "file", asset = NULL, grid = list(c("", ""), c("", ""), c("", "")),
+                    header_mode = "header", size = 100, caption = "", decimals = 2),
     callout  = list(title = "Key finding", text = ""),
     qr       = list(url = "", label = "Scan for the full paper", size = 35, asset = NULL),
     equation = list(latex = "", size = 100, asset = NULL))
@@ -68,7 +69,7 @@ find_block <- function(proj, id) {
 save_project <- function(proj, asset_dir, zipfile) {
   tmp <- tempfile("proj"); dir.create(tmp)
   p <- proj
-  p$assets <- lapply(p$assets, function(a) { a$thumb <- NULL; a$data <- NULL; a$raw <- NULL; a })
+  p$assets <- lapply(p$assets, function(a) { a$thumb <- NULL; a$data <- NULL; a$raw <- NULL; a$cells <- NULL; a })
   jsonlite::write_json(p, file.path(tmp, "project.json"), auto_unbox = TRUE, null = "null", pretty = TRUE)
   files <- vapply(proj$assets, `[[`, "", "file")
   dir.create(file.path(tmp, "assets"))
@@ -96,8 +97,7 @@ load_project <- function(zipfile, asset_dir) {
     if (!file.exists(src)) { p$assets[[id]] <- NULL; next }
     file.copy(src, file.path(asset_dir, a$file), overwrite = TRUE)
     if (identical(a$kind, "table")) {
-      raw <- utils::read.csv(src, check.names = FALSE, stringsAsFactors = FALSE)
-      a$raw <- raw; a$data <- format_table(raw, a$decimals %||% 2)
+      a$cells <- load_table_cells(src)
     } else {
       a$thumb <- thumb_from_file(file.path(asset_dir, a$file), if (identical(a$kind, "qr")) 300 else 700)
     }

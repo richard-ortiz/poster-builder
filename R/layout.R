@@ -64,7 +64,7 @@ block_is_empty <- function(b, assets) {
     text = , callout = !nzchar(trimws(b$text %||% "")),
     figure = is.null(assets[[b$asset %||% ""]]),
     figrow = , figpair = !length(Filter(function(a) !is.null(assets[[a]]), unlist(b$assets))),
-    table = is.null(assets[[b$asset %||% ""]]),
+    table = is.null(table_cells(b, assets)),
     qr = !nzchar(trimws(b$url %||% "")),
     equation = !nzchar(trimws(b$latex %||% "")),
     subheading = !nzchar(trimws(b$text %||% "")),
@@ -211,18 +211,17 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
     }
     out$h <- h + out$caph
   } else if (b$type == "table") {
-    a <- assets[[b$asset %||% ""]]
-    df <- if (!is.null(a)) a$data else data.frame(Column = c("…", "…"), Value = c("…", "…"))
+    cells <- table_cells(b, assets)
+    tb <- if (is.null(cells)) table_placeholder() else prep_table(cells, b$header_mode %||% "header", b$decimals %||% 2)
     tsz <- csz; W <- cw * pct
-    colw <- table_col_widths(df, tsz, W)
-    rowh <- function(vals) {
-      lines <- mapply(function(v, w) para_lines(list(bullet = FALSE, runs = list(list(t = as.character(v), b = FALSE, i = FALSE))), tsz, max(w - 0.12, 0.2)), vals, colw)
-      max(lines) * tsz * 1.2 / 72 + 0.1
-    }
-    hh <- rowh(names(df)) + 0.02
-    rh <- if (nrow(df)) vapply(seq_len(nrow(df)), function(r) rowh(unlist(lapply(df[r, , drop = FALSE], as.character))), numeric(1)) else numeric(0)
-    out$fixed <- TRUE; out$fw <- W; out$colw <- colw; out$df <- df; out$tsz <- tsz
-    out$rowh <- c(hh, rh); out$fh <- sum(out$rowh); out$asset <- a
+    colw <- table_col_widths(rbind(if (!is.null(tb$header)) tb$header, tb$body), tsz, W)
+    one <- function(v, w, bold = FALSE) para_lines(list(bullet = FALSE, runs = list(list(t = as.character(v), b = bold, i = FALSE))), tsz, max(w - 0.12, 0.2))
+    rowh <- function(vals, bold = FALSE) max(mapply(one, vals, colw, MoreArgs = list(bold = bold))) * tsz * 1.2 / 72 + 0.1
+    hs <- c(if (!is.null(tb$title)) one(tb$title, W, TRUE) * tsz * 1.2 / 72 + 0.12,
+            if (!is.null(tb$header)) rowh(tb$header, TRUE) + 0.02,
+            if (nrow(tb$body)) vapply(seq_len(nrow(tb$body)), function(r) rowh(tb$body[r, ]), numeric(1)))
+    out$fixed <- TRUE; out$fw <- W; out$colw <- colw; out$tb <- tb; out$tsz <- tsz
+    out$rowh <- hs; out$fh <- sum(hs); out$asset <- if (is.null(cells)) NULL else TRUE
     out$cap <- caption_paras(b, b$.label); out$capsz <- csz; out$capw <- max(W, cw * 0.6)
     out$caph <- if (length(out$cap)) text_height(out$cap, csz, out$capw) + 0.1 else 0
     out$h <- out$fh + out$caph
@@ -244,17 +243,25 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
   out
 }
 
-table_col_widths <- function(df, tsz, W) {
-  if (!ncol(df)) return(W)
-  need <- vapply(seq_along(df), function(j) {
-    vals <- c(names(df)[j], as.character(df[[j]]))
+table_col_widths <- function(m, tsz, W) {
+  m <- as.matrix(m)
+  if (!ncol(m)) return(W)
+  need <- vapply(seq_len(ncol(m)), function(j) {
+    vals <- m[, j]; vals <- vals[nzchar(vals)]; if (!length(vals)) vals <- " "
     max(vapply(vals, function(v) text_width_1line(list(list(bullet = FALSE, runs = list(list(t = v, b = TRUE, i = FALSE)))), tsz), numeric(1))) + 0.15
   }, numeric(1))
   need <- pmax(need, 0.6)
-  if (sum(need) <= W) need * W / sum(need) else {
-    # shrink the widest columns first, never below a fair share
-    w <- pmin(need, W / length(need) * 1.6); w * W / sum(w)
+  if (sum(need) <= W) return(need * W / sum(need))
+  # "water filling": narrow columns get all they need; wide (wrapping) columns share the rest
+  w <- rep(NA_real_, length(need)); left <- W
+  repeat {
+    open <- is.na(w); fair <- left / sum(open)
+    fits <- open & need <= fair
+    if (!any(fits)) { w[open] <- fair; break }
+    w[fits] <- need[fits]; left <- left - sum(need[fits])
+    if (!any(is.na(w))) break
   }
+  w * W / sum(w)
 }
 
 # ---- panel / poster layout ------------------------------------------------

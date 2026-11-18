@@ -23,12 +23,14 @@ img_div <- function(a, x, y, w, h, label = "figure") {
 }
 
 table_html <- function(m, x, y) {
+  tb <- m$tb; n <- tb$ncol
   sz <- fpx(m$tsz)
   cols <- paste0(sprintf('<col style="width:%s">', px(m$colw)), collapse = "")
-  head <- paste0("<tr>", paste0("<th>", html_escape(names(m$df)), "</th>", collapse = ""), "</tr>")
-  rows <- if (nrow(m$df)) paste0(vapply(seq_len(nrow(m$df)), function(r)
-    paste0("<tr>", paste0("<td>", html_escape(unlist(lapply(m$df[r, , drop = FALSE], as.character))), "</td>", collapse = ""), "</tr>"), ""), collapse = "") else ""
-  sprintf('<table class="ptable" style="%sfont-size:%.2fpx">%s%s%s</table>', box_style(x, y, m$fw), sz, cols, head, rows)
+  title <- if (!is.null(tb$title)) sprintf('<thead><tr><th colspan="%d" style="text-align:center">%s</th></tr></thead>', n, html_escape(tb$title)) else ""
+  head <- if (!is.null(tb$header)) paste0("<thead><tr>", paste0("<th>", html_escape(c(tb$header, rep("", n))[seq_len(n)]), "</th>", collapse = ""), "</tr></thead>") else ""
+  rows <- if (nrow(tb$body)) paste0(vapply(seq_len(nrow(tb$body)), function(r)
+    paste0("<tr>", paste0("<td>", html_escape(c(tb$body[r, ], rep("", n))[seq_len(n)]), "</td>", collapse = ""), "</tr>"), ""), collapse = "") else ""
+  sprintf('<table class="ptable" style="%sfont-size:%.2fpx">%s%s%s<tbody>%s</tbody></table>', box_style(x, y, m$fw), sz, cols, title, head, rows)
 }
 
 arrow_svg <- function(a) {

@@ -140,12 +140,12 @@ server <- function(input, output, session) {
       figure = c("caption", "nonumber", "autogrow"), figrow = c("caption", "n", "labels", "label_color", "nonumber", "autogrow"),
       figpair = c("n", "nonumber", "autogrow"),
       figtext = c("text", "caption", "side", "boxed", "keep_lines", "nonumber", "autogrow"),
-      table = c("caption"), callout = c("title", "text"), qr = c("label"), character(0))
+      table = c("caption", "source", "header_mode"), callout = c("title", "text"), qr = c("label"), character(0))
     for (f in fields) local({
       ff <- f; on(ff, function(v) {
         if (identical(get_b(id)[[ff]], v)) return()
         set_f(id, ff, v); bump()
-        if (ff %in% c("autogrow", "n")) bump_struct()      # refresh the size label / caption boxes
+        if (ff %in% c("autogrow", "n", "source")) bump_struct()      # refresh the size label / caption boxes / table editor
       })
     })
     if (b$type == "figpair") for (k in 1:3) local({
@@ -174,10 +174,12 @@ server <- function(input, output, session) {
       on("file", function(v) tryCatch({
         set_f(id, "asset", add_asset(ingest_table(v$datapath, v$name, adir, get_b(id)$decimals %||% 2))); bump(); bump_struct()
       }, error = notify_err))
-      on("decimals", function(v) {
-        set_f(id, "decimals", v); a <- S$proj$assets[[get_b(id)$asset %||% ""]]
-        if (!is.null(a) && is.numeric(v)) { a$data <- format_table(a$raw, v); a$decimals <- v; S$proj$assets[[a$id]] <- a }
-        bump()
+      on("decimals", function(v) { if (is.numeric(v) && !identical(get_b(id)$decimals, v)) { set_f(id, "decimals", v); bump() } })
+      # typed-in table: the grid sends its cells as JSON while you type
+      on("grid", function(v) {
+        rows <- tryCatch(lapply(jsonlite::fromJSON(v, simplifyVector = FALSE), function(r) vapply(r, function(x) as.character(x %||% ""), "")),
+                         error = function(e) NULL)
+        if (!is.null(rows)) { set_f(id, "grid", rows); bump() }
       })
     }
     if (b$type %in% c("qr", "equation")) {
@@ -273,13 +275,26 @@ server <- function(input, output, session) {
           opts(fig_opts(b),
                numericInput(nm("n"), "Number of figures in the row", b$n %||% 2, min = 2, max = 3, width = "100%")))
       },
-      table = tagList(
-        div(class = "file-row", fileInput(nm("file"), NULL, accept = c(".csv", ".xlsx", ".xls"), buttonLabel = "Choose CSV / Excel…", width = "100%"),
-            if (!is.null(A[[b$asset %||% ""]])) span(class = "help", sprintf("%s (%d rows × %d columns)", A[[b$asset]]$name, nrow(A[[b$asset]]$data), ncol(A[[b$asset]]$data)))),
-        textInput(nm("caption"), "Caption (shown above the table)", b$caption, width = "100%"),
-        sliderInput(nm("size"), "Size", 30, 100, b$size, step = 5, post = "%", width = "100%"),
-        opts(numericInput(nm("decimals"), "Decimal places", b$decimals %||% 2, min = 0, max = 6, width = "120px"),
-             p(class = "help", "The first row of the first sheet is used as the header. Up to 40 rows."))),
+      table = {
+        manual <- identical(b$source, "manual")
+        a <- A[[b$asset %||% ""]]
+        grid_json <- jsonlite::toJSON(lapply(b$grid %||% list(c("", "")), function(r) as.character(unlist(r))), auto_unbox = FALSE)
+        tagList(
+          radioButtons(nm("source"), NULL, c("Upload CSV / Excel" = "file", "Type it in" = "manual"), selected = if (manual) "manual" else "file", inline = TRUE),
+          if (!manual) div(class = "file-row", fileInput(nm("file"), NULL, accept = c(".csv", ".xlsx", ".xls"), buttonLabel = "Choose CSV / Excel\u2026", width = "100%"),
+              if (!is.null(a)) span(class = "help", sprintf("%s (%d rows \u00d7 %d columns)", a$name, nrow(a$cells), ncol(a$cells))))
+          else tagList(
+            div(id = nm("grid"), class = "tgrid", `data-grid` = as.character(grid_json)),
+            p(class = "help", "Click a cell to type. Enter moves down. You can also paste a block of cells copied from Excel or Google Sheets.")),
+          selectInput(nm("header_mode"), "First row", c("Column headers (one per column)" = "header",
+                                                         "A title bar across the whole table" = "title",
+                                                         "Just data (no header)" = "none"),
+                      selected = b$header_mode %||% "header", width = "100%", selectize = FALSE),
+          textInput(nm("caption"), "Caption (shown above the table)", b$caption, width = "100%"),
+          sliderInput(nm("size"), "Size", 30, 100, b$size, step = 5, post = "%", width = "100%"),
+          opts(numericInput(nm("decimals"), "Decimal places for numbers", b$decimals %||% 2, min = 0, max = 6, width = "160px"),
+               p(class = "help", "Empty rows and columns are removed automatically. Up to 40 rows.")))
+      },
       callout = tagList(
         textAreaInput(nm("text"), NULL, b$text, rows = 3, width = "100%", placeholder = "Your take-home message in one or two sentences"),
         opts(textInput(nm("title"), "Callout title", b$title, width = "100%"))),

@@ -130,3 +130,73 @@ $(document).on('shiny:value', function(e){
   setTimeout(function(){ var seen = false; try { seen = localStorage.getItem('posterWelcomeSeen') === '1'; } catch(e) {}
     var w = document.getElementById('welcome_card'); if (w && !seen) w.style.display = 'block'; }, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Editable table grid (Table block, "Type it in")
+// ---------------------------------------------------------------------------
+(function(){
+  function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function initGrid(el){
+    if (el.dataset.ready) return; el.dataset.ready = '1';
+    var data; try { data = JSON.parse(el.dataset.grid || '[]'); } catch(e) { data = []; }
+    if (!data.length) data = [['',''],['',''],['','']];
+    var timer = null;
+    function send(){ clearTimeout(timer); timer = setTimeout(function(){ Shiny.setInputValue(el.id, JSON.stringify(data)); }, 350); }
+    function width(){ return Math.max.apply(null, data.map(function(r){ return r.length; }).concat([1])); }
+    function pad(){ var w = width(); data.forEach(function(r){ while (r.length < w) r.push(''); }); }
+    function render(focus){
+      pad();
+      var h = '<table class="tgrid-table">';
+      data.forEach(function(r, i){
+        h += '<tr' + (i === 0 ? ' class="first"' : '') + '>';
+        r.forEach(function(c, j){ h += '<td contenteditable="true" data-r="' + i + '" data-c="' + j + '">' + esc(c) + '</td>'; });
+        h += '</tr>';
+      });
+      h += '</table><div class="tgrid-btns">' +
+           '<button type="button" class="btn btn-light btn-sm" data-act="addr">+ Row</button>' +
+           '<button type="button" class="btn btn-light btn-sm" data-act="addc">+ Column</button>' +
+           '<button type="button" class="btn btn-light btn-sm" data-act="delr">− Row</button>' +
+           '<button type="button" class="btn btn-light btn-sm" data-act="delc">− Column</button></div>';
+      el.innerHTML = h;
+      if (focus){ var td = el.querySelector('td[data-r="' + focus[0] + '"][data-c="' + focus[1] + '"]'); if (td) td.focus(); }
+    }
+    el.addEventListener('input', function(e){
+      var td = e.target.closest('td'); if (!td) return;
+      data[+td.dataset.r][+td.dataset.c] = td.innerText.replace(/\n/g, ' ').trim();
+      send();
+    });
+    el.addEventListener('keydown', function(e){
+      var td = e.target.closest('td'); if (!td || e.key !== 'Enter') return;
+      e.preventDefault();
+      var r = +td.dataset.r + 1, c = +td.dataset.c;
+      if (r >= data.length) { data.push(new Array(width()).fill('')); send(); }
+      render([r, c]);
+    });
+    el.addEventListener('paste', function(e){
+      var td = e.target.closest('td'); if (!td) return;
+      var text = (e.clipboardData || window.clipboardData).getData('text');
+      if (!/[\t\n]/.test(text.replace(/\n+$/, ''))) return;      // single cell: normal paste
+      e.preventDefault();
+      var rows = text.replace(/\r/g, '').replace(/\n+$/, '').split('\n').map(function(l){ return l.split('\t'); });
+      var r0 = +td.dataset.r, c0 = +td.dataset.c;
+      rows.forEach(function(row, i){
+        while (data.length <= r0 + i) data.push([]);
+        row.forEach(function(v, j){ var R = data[r0 + i]; while (R.length <= c0 + j) R.push(''); R[c0 + j] = v.trim(); });
+      });
+      render(); send();
+    });
+    el.addEventListener('click', function(e){
+      var b = e.target.closest('button[data-act]'); if (!b) return;
+      var act = b.dataset.act;
+      if (act === 'addr') data.push(new Array(width()).fill(''));
+      if (act === 'addc') data.forEach(function(r){ r.push(''); });
+      if (act === 'delr' && data.length > 1) data.pop();
+      if (act === 'delc' && width() > 1) data.forEach(function(r){ r.length = width() - 1; });
+      render(); send();
+    });
+    render();
+  }
+  function scan(){ document.querySelectorAll('.tgrid').forEach(initGrid); }
+  new MutationObserver(scan).observe(document.documentElement, {childList: true, subtree: true});
+  $(document).on('shiny:value', function(){ setTimeout(scan, 0); });
+})();

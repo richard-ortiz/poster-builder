@@ -65,15 +65,12 @@ ingest_image <- function(path, name, dir, kind = "image") {
 }
 
 ingest_table <- function(path, name, dir, decimals = 2) {
-  ext <- tolower(tools::file_ext(name))
-  df <- if (ext %in% c("xlsx", "xls")) as.data.frame(readxl::read_excel(path, sheet = 1), check.names = FALSE)
-        else utils::read.csv(path, check.names = FALSE, stringsAsFactors = FALSE)
-  if (nrow(df) > 40) df <- df[1:40, , drop = FALSE]
+  cells <- read_table_cells(path, name)          # every cell as text; no header guessing
+  if (!length(cells)) stop("That file looks empty. Check the first sheet has your table.")
   id <- new_id()
   out <- file.path(dir, paste0(id, ".csv"))
-  utils::write.csv(df, out, row.names = FALSE)
-  list(id = id, kind = "table", file = basename(out), name = name, raw = df,
-       data = format_table(df, decimals), decimals = decimals, w = 1, h = 1)
+  write_table_cells(cells, out)
+  list(id = id, kind = "table", file = basename(out), name = name, cells = cells, w = 1, h = 1)
 }
 
 format_table <- function(df, decimals = 2) {

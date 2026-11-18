@@ -56,13 +56,28 @@ placeholder_xml <- function(x, y, w, h, label = "figure") {
 }
 
 build_flextable <- function(m) {
-  ft <- flextable::flextable(m$df)
+  tb <- m$tb; n <- tb$ncol
+  body <- tb$body
+  if (!nrow(body)) body <- matrix("", 1, n)
+  if (ncol(body) < n) body <- cbind(body, matrix("", nrow(body), n - ncol(body)))
+  df <- as.data.frame(body, stringsAsFactors = FALSE); names(df) <- paste0("V", seq_len(n))
+  ft <- flextable::flextable(df)
+  has_head <- !is.null(tb$header) || !is.null(tb$title)
+  if (!is.null(tb$header)) {
+    ft <- flextable::set_header_labels(ft, values = setNames(as.list(c(tb$header, rep("", n))[seq_len(n)]), names(df)))
+  } else if (!is.null(tb$title)) {
+    ft <- flextable::set_header_labels(ft, values = setNames(as.list(c(tb$title, rep("", n - 1))), names(df)))
+    if (n > 1) ft <- flextable::merge_at(ft, i = 1, j = seq_len(n), part = "header")
+    ft <- flextable::align(ft, align = "center", part = "header")
+  } else ft <- flextable::delete_part(ft, part = "header")
   ft <- flextable::font(ft, fontname = "Arial", part = "all")
   ft <- flextable::fontsize(ft, size = m$tsz, part = "all")
-  ft <- flextable::bold(ft, part = "header")
-  ft <- flextable::bg(ft, bg = paste0("#", NIU_RED), part = "header")
-  ft <- flextable::color(ft, color = "white", part = "header")
-  if (nrow(m$df) > 1) ft <- flextable::bg(ft, i = seq(2, nrow(m$df), by = 2), bg = "#F4F4F4", part = "body")
+  if (has_head) {
+    ft <- flextable::bold(ft, part = "header")
+    ft <- flextable::bg(ft, bg = paste0("#", NIU_RED), part = "header")
+    ft <- flextable::color(ft, color = "white", part = "header")
+  }
+  if (nrow(df) > 1) ft <- flextable::bg(ft, i = seq(2, nrow(df), by = 2), bg = "#F4F4F4", part = "body")
   ft <- flextable::border_remove(ft)
   ft <- flextable::hline_bottom(ft, border = officer::fp_border(color = paste0("#", NIU_RED), width = 2), part = "body")
   ft <- flextable::padding(ft, padding.top = 2, padding.bottom = 2, padding.left = 4, padding.right = 4, part = "all")
