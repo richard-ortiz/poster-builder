@@ -90,6 +90,11 @@ preview_html <- function(proj, lay) {
           if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(t$x, t$y, t$w, t$h)))
           add(text_div(m$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, align = body_align))
         }
+        for (t in pr$boxes %||% list()) {
+          if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(t$x, t$y, t$w, t$h)))
+          add(text_div(t$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset, align = "left",
+                       extra = "display:flex;flex-direction:column;justify-content:center;"))
+        }
       }
       else if (m$type == "callout") {
         add(sprintf('<div class="pcallout" style="%s"></div>', box_style(m$x, m$y, m$w, m$h)))

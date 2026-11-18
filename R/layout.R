@@ -81,7 +81,7 @@ flow_steps <- function(b) {
   st <- trimws(st); st[nzchar(st)]
 }
 SIZE_RANGE <- list(figure = c(20, 100), figrow = c(30, 100), figpair = c(30, 100), table = c(30, 100), qr = c(15, 70),
-                   equation = c(50, 250), figtext = c(20, 75))
+                   equation = c(50, 250), figtext = c(20, 100))
 BOX_INSET <- 0.2
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -158,17 +158,44 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
   } else if (b$type == "figtext") {
     a <- assets[[b$asset %||% ""]]
     asp <- if (is.null(a)) 4 / 3 else a$w / a$h
-    fp <- min(0.75, max(0.2, (b$size %||% 50) / 100 * scale))
+    side <- b$side %||% "left"                 # image position: left/right, or text "above"/"below"
+    vert <- side %in% c("above", "below")
+    fp <- min(if (vert) 1 else 0.75, max(0.2, (b$size %||% 50) / 100 * scale))
+    # beside the image, keep a readable text column (~2.6 in or 35% of the panel)
+    if (!vert && nzchar(trimws(b$text %||% ""))) fp <- max(0.2, min(fp, (cw - 0.3 - max(2.6, 0.35 * cw)) / cw))
     fw <- cw * fp; fh <- fw / asp; gap <- 0.3
-    out$side <- b$side %||% "left"; out$asset <- a; out$fixed <- TRUE
+    out$side <- side; out$vert <- vert; out$asset <- a; out$fixed <- TRUE
     out$fw <- fw; out$fh <- fh
     out$cap <- caption_paras(b, b$.label); out$capsz <- csz; out$capw <- fw
     out$caph <- if (length(out$cap)) text_height(out$cap, csz, fw) + 0.12 else 0
     out$boxed <- b$boxed %||% "dashed"; out$inset <- if (out$boxed == "none") 0 else BOX_INSET
-    out$tw <- cw - fw - gap
-    out$paras <- parse_rich(b$text, isTRUE(b$keep_lines))
-    out$th <- if (length(out$paras)) text_height(out$paras, s, out$tw - 2 * out$inset) + 2 * out$inset else 0
-    out$h <- max(fh + out$caph, out$th)
+    out$tw <- if (vert) cw else cw - fw - gap
+    out$multi <- identical(b$text_boxes, "each")
+    out$box_row <- FALSE
+    if (out$multi) {
+      items <- flow_steps(list(steps = b$text)); nb <- length(items)
+      bgap <- 0.25
+      # above/below: boxes side by side in a row when each can be at least 2.4 in wide
+      out$box_row <- vert && nb > 1 && (cw - bgap * (nb - 1)) / nb >= 2.4
+      bw <- if (out$box_row) (cw - bgap * (nb - 1)) / nb else out$tw
+      out$boxes <- lapply(items, function(t) { pp <- parse_rich(t, TRUE)
+        list(paras = pp, w = bw, h = text_height(pp, s, bw - 2 * out$inset) + 2 * out$inset) })
+      hs <- vapply(out$boxes, `[[`, numeric(1), "h")
+      if (out$box_row) {
+        rh <- if (nb) max(hs) else 0
+        out$boxes <- lapply(out$boxes, function(x) { x$h <- rh; x })   # equal heights in the row
+        out$box_gap <- bgap; out$th <- rh
+      } else {
+        # stacked: beside the image, spread to line up with it (gaps up to 1 in)
+        out$box_gap <- if (nb > 1) { if (vert) 0.2 else min(1, max(0.2, (fh - sum(hs)) / (nb - 1))) } else 0
+        out$th <- if (nb) sum(hs) + out$box_gap * (nb - 1) else 0
+      }
+      out$paras <- list()
+    } else {
+      out$paras <- parse_rich(b$text, isTRUE(b$keep_lines))
+      out$th <- if (length(out$paras)) text_height(out$paras, s, out$tw - 2 * out$inset) + 2 * out$inset else 0
+    }
+    out$h <- if (vert) fh + out$caph + (if (out$th > 0) out$th + 0.25 else 0) else max(fh + out$caph, out$th)
   } else if (b$type == "callout") {
     out$paras <- c(if (nzchar(trimws(b$title %||% ""))) style_paras(plain_paras(b$title), b = TRUE, color = NIU_RED) else list(),
                    parse_rich(b$text))
@@ -675,12 +702,27 @@ affil_paras <- function(txt) {
 block_parts <- function(m) {
   if (m$type == "figtext") {
     gap <- 0.3
-    ix <- if (m$side == "right") m$x + m$w - m$fw else m$x
-    tx <- if (m$side == "right") m$x else m$x + m$fw + gap
-    iy <- m$y + max(0, (m$h - m$fh - m$caph) / 2)
-    ty <- m$y + max(0, (m$h - m$th) / 2)
+    if (isTRUE(m$vert)) {
+      ix <- m$x + (m$w - m$fw) / 2
+      if (m$side == "above") { ty <- m$y; iy <- m$y + (if (m$th > 0) m$th + 0.25 else 0) }
+      else { iy <- m$y; ty <- iy + m$fh + m$caph + 0.25 }
+      tx <- m$x
+    } else {
+      ix <- if (m$side == "right") m$x + m$w - m$fw else m$x
+      tx <- if (m$side == "right") m$x else m$x + m$fw + gap
+      iy <- m$y + max(0, (m$h - m$fh - m$caph) / 2)
+      ty <- m$y + max(0, (m$h - m$th) / 2)
+    }
+    boxes <- NULL
+    if (isTRUE(m$multi)) {
+      x <- tx; y <- ty
+      boxes <- lapply(m$boxes, function(bx) {
+        r <- list(x = x, y = y, w = bx$w %||% m$tw, h = bx$h, paras = bx$paras)
+        if (isTRUE(m$box_row)) x <<- x + r$w + m$box_gap else y <<- y + bx$h + m$box_gap
+        r })
+    }
     return(list(img = list(x = ix, y = iy, w = m$fw, h = m$fh), cap_y = iy + m$fh + 0.12,
-                text = list(x = tx, y = ty, w = m$tw, h = m$th)))
+                text = list(x = tx, y = ty, w = m$tw, h = m$th), boxes = boxes))
   }
   if (m$type == "flow") {
     bx <- lapply(m$boxes, function(b) list(x = m$x + b$dx, y = m$y + b$dy, w = b$w, h = b$h, paras = b$paras, row = b$row))
@@ -709,7 +751,7 @@ block_visual_rect <- function(m) {
   switch(m$type,
     figure = , figrow = , figpair = , qr = , equation = list(x = cx - m$fw / 2, y = m$y, w = m$fw, h = m$fh, k = 2),
     table = list(x = cx - m$fw / 2, y = m$y + m$caph, w = m$fw, h = m$fh, k = 2),
-    figtext = { p <- block_parts(m); c(p$img, list(k = if (m$side == "right") -1 else 1)) },
+    figtext = { p <- block_parts(m); c(p$img, list(k = if (isTRUE(m$vert)) 2 else if (m$side == "right") -1 else 1)) },
     NULL)
 }
 

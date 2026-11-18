@@ -15,7 +15,7 @@ new_block <- function(type, ...) {
     text     = list(text = "", keep_lines = FALSE, boxed = "none"),
     subheading = list(text = "", style = "box", italic = TRUE),
     flow     = list(steps = "", caption = ""),
-    figtext  = list(asset = NULL, size = 50, side = "left", text = "", boxed = "dashed", caption = "", keep_lines = FALSE, nonumber = FALSE, autogrow = TRUE),
+    figtext  = list(asset = NULL, size = 50, side = "left", text = "", text_boxes = "one", boxed = "dashed", caption = "", keep_lines = FALSE, nonumber = FALSE, autogrow = TRUE),
     figure   = list(asset = NULL, size = 100, caption = "", nonumber = FALSE, autogrow = TRUE),
     figrow   = list(assets = list(), n = 2, size = 100, caption = "", labels = TRUE, label_color = "black", nonumber = FALSE, autogrow = TRUE),
     figpair  = list(assets = list(), n = 2, size = 100, captions = list("", "", ""), nonumber = FALSE, autogrow = TRUE),

@@ -139,7 +139,7 @@ server <- function(input, output, session) {
       text = c("text", "keep_lines", "boxed"), subheading = c("text", "style", "italic"), flow = c("steps", "caption"),
       figure = c("caption", "nonumber", "autogrow"), figrow = c("caption", "n", "labels", "label_color", "nonumber", "autogrow"),
       figpair = c("n", "nonumber", "autogrow"),
-      figtext = c("text", "caption", "side", "boxed", "keep_lines", "nonumber", "autogrow"),
+      figtext = c("text", "caption", "side", "text_boxes", "boxed", "keep_lines", "nonumber", "autogrow"),
       table = c("caption", "source", "header_mode"), callout = c("title", "text"), qr = c("label"), character(0))
     for (f in fields) local({
       ff <- f; on(ff, function(v) {
@@ -240,10 +240,14 @@ server <- function(input, output, session) {
              p(class = "help", "To write a step over several lines, leave a blank line between steps instead. Rows balance automatically."))),
       figtext = tagList(
         file_row(fileInput(nm("file"), NULL, accept = c("image/*", ".tif", ".tiff", ".svg"), buttonLabel = "Choose image…", width = "100%"), A[[b$asset %||% ""]]),
-        textAreaInput(nm("text"), "Text beside the image", b$text, rows = 3, width = "100%"),
-        sliderInput(nm("size"), size_label(b, "Image size"), 20, 75, b$size, step = 5, post = "%", width = "100%"),
+        textAreaInput(nm("text"), "Text beside the image", b$text, rows = 3, width = "100%",
+                      placeholder = "One box: type normally.  Separate boxes: one line per box (or leave a blank line between boxes)."),
+        div(class = "inline-pair",
+          radioButtons(nm("text_boxes"), "Text style", c("One text box" = "one", "A separate box for each line" = "each"),
+                       selected = b$text_boxes %||% "one", inline = TRUE),
+          radioButtons(nm("side"), "Text on the", c("Right" = "left", "Left" = "right", "Top" = "above", "Bottom" = "below"), selected = b$side %||% "left", inline = TRUE)),
+        sliderInput(nm("size"), size_label(b, "Image size"), 20, 100, b$size, step = 5, post = "%", width = "100%"),
         opts(fig_opts(b),
-             selectInput(nm("side"), "Image position", c("Image left, text right" = "left", "Image right, text left" = "right"), b$side %||% "left", selectize = FALSE),
              selectInput(nm("boxed"), "Text border", c("Dashed" = "dashed", "Solid" = "solid", "None" = "none"), b$boxed %||% "dashed", selectize = FALSE),
              textInput(nm("caption"), "Caption under the image", b$caption, width = "100%"))),
       figure = tagList(

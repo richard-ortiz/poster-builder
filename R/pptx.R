@@ -147,6 +147,11 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
           if (m$boxed != "none") back <- c(back, frame_xml(t$x, t$y, t$w, t$h, m$boxed))
           front <- c(front, shape_xml("Side text", t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = body_align))
         }
+        for (t in pr$boxes %||% list()) {
+          if (m$boxed != "none") back <- c(back, frame_xml(t$x, t$y, t$w, t$h, m$boxed))
+          front <- c(front, shape_xml("Side text box", t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset + 0.1,
+                                      paras = t$paras, size = lay$body, align = "l", anchor = "ctr"))
+        }
       } else if (m$type == "callout") {
         back <- c(back, shape_xml("Callout box", m$x, m$y, m$w, m$h, geom = "roundRect", fill = "FBE7EA", line = NIU_RED, line_w = 3, adj = round(0.2 / min(m$w, m$h) * 1e5)))
         front <- c(front, shape_xml("Callout text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.05, paras = m$paras, size = lay$body, align = body_align))

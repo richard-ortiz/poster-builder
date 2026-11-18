@@ -148,3 +148,5 @@ details.preview-help summary{cursor:pointer}
 .tgrid-table tr.first td{background:#fbeef0;font-weight:700}
 .tgrid-btns{display:flex;gap:6px;margin-top:6px}
 .tgrid-btns .btn{padding:1px 8px;font-size:.78rem;border:1px solid #e3e3e3}
+.inline-pair{display:flex;gap:24px;flex-wrap:wrap}
+.inline-pair .form-group{margin-bottom:6px}
