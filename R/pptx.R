@@ -139,16 +139,20 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
         fx <- cx - m$fw / 2
         if (is.null(m$asset)) front <- c(front, placeholder_xml(fx, m$y, m$fw, m$fh)) else add_img(m$asset, fx, m$y, m$fw, m$fh)
         add_caption(m, cx, m$y + m$fh + 0.12)
-      } else if (m$type == "figrow") {
+      } else if (m$type %in% c("figrow", "figpair")) {
         x <- cx - m$fw / 2
         for (k in seq_along(m$items)) {
           it <- m$items[[k]]
           if (is.null(it$asset)) front <- c(front, placeholder_xml(x, m$y, it$w, it$h)) else add_img(it$asset, x, m$y, it$w, it$h)
-          if (m$labels) front <- c(front, shape_xml("Panel label", x + 0.05, m$y + 0.02, 1, lay$body * 1.6 / 72,
-                                                    paras = plain_paras(LETTERS[k], b = TRUE), size = round(lay$body * 1.3)))
-          x <- x + it$w + 0.25
+          if (m$type == "figrow" && m$labels)
+            front <- c(front, shape_xml("Panel label", x + 0.08, m$y + 0.04, 1, lay$body * 1.6 / 72,
+                                        paras = plain_paras(LETTERS[k], b = TRUE), size = round(lay$body * 1.3),
+                                        color = if (identical(m$label_color, "white")) "FFFFFF" else "000000"))
+          if (m$type == "figpair" && length(it$cap))
+            front <- c(front, shape_xml("Caption", x, m$y + m$fh + 0.12, it$w, it$caph, paras = it$cap, size = m$capsz))
+          x <- x + it$w + m$gap
         }
-        add_caption(m, cx, m$y + m$fh + 0.12)
+        if (m$type == "figrow") add_caption(m, cx, m$y + m$fh + 0.12)
       } else if (m$type == "table") {
         add_caption(m, cx, m$y)
         ty <- m$y + m$caph

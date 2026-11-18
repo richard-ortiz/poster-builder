@@ -135,13 +135,38 @@ server <- function(input, output, session) {
     on("up",   function(v) move_block(id, -1))
     on("down", function(v) move_block(id, +1))
     on("del",  function(v) remove_block(id))
-    for (f in intersect(c("text", "caption", "title", "label", "size", "labels", "n", "keep_lines", "steps", "side", "boxed", "style", "italic", "nonumber"), names(b))) local({
-      ff <- f; on(ff, function(v) { set_f(id, ff, v); bump() })
+    fields <- switch(b$type,
+      text = c("text", "keep_lines", "boxed"), subheading = c("text", "style", "italic"), flow = c("steps", "caption"),
+      figure = c("caption", "nonumber", "autogrow"), figrow = c("caption", "n", "labels", "label_color", "nonumber", "autogrow"),
+      figpair = c("n", "nonumber", "autogrow"),
+      figtext = c("text", "caption", "side", "boxed", "keep_lines", "nonumber", "autogrow"),
+      table = c("caption"), callout = c("title", "text"), qr = c("label"), character(0))
+    for (f in fields) local({
+      ff <- f; on(ff, function(v) {
+        if (identical(get_b(id)[[ff]], v)) return()
+        set_f(id, ff, v); bump()
+        if (ff %in% c("autogrow", "n")) bump_struct()      # refresh the size label / caption boxes
+      })
+    })
+    if (b$type == "figpair") for (k in 1:3) local({
+      kk <- k; on(paste0("cap", kk), function(v) {
+        caps <- as.list(unlist(get_b(id)$captions) %||% character(0)); length(caps) <- 3
+        caps <- lapply(caps, function(x) x %||% "")
+        if (identical(caps[[kk]], v)) return()
+        caps[[kk]] <- v; set_f(id, "captions", caps); bump()
+      })
+    })
+    if (b$type %in% c("figure", "figrow", "figpair", "figtext", "table", "qr", "equation")) on("size", function(v) {
+      if (identical(as.numeric(get_b(id)$size %||% NA), as.numeric(v))) return()
+      set_f(id, "size", v)
+      # a size chosen by hand is kept: stop auto-growing this figure
+      if (b$type %in% c("figure", "figrow", "figpair", "figtext") && !identical(get_b(id)$autogrow, FALSE)) { set_f(id, "autogrow", FALSE); bump_struct() }
+      bump()
     })
     if (b$type %in% c("figure", "figtext")) on("file", function(v) tryCatch({
       set_f(id, "asset", add_asset(ingest_image(v$datapath, v$name, adir))); bump(); bump_struct()
     }, error = notify_err))
-    if (b$type == "figrow") on("files", function(v) tryCatch({
+    if (b$type %in% c("figrow", "figpair")) on("files", function(v) tryCatch({
       ids <- lapply(seq_len(nrow(v)), function(i) add_asset(ingest_image(v$datapath[i], v$name[i], adir)))
       set_f(id, "assets", ids); set_f(id, "n", max(get_b(id)$n %||% 2, length(ids))); bump(); bump_struct()
     }, error = notify_err))
@@ -192,6 +217,10 @@ server <- function(input, output, session) {
     id <- b$id; nm <- function(f) paste0(id, "_", f)
     A <- S$proj$assets
     opts <- function(...) tags$details(class = "opts", tags$summary("More options"), div(class = "opts-body", ...))
+    size_label <- function(b, lab = "Size") if (identical(b$autogrow, FALSE)) paste(lab, "(fixed)") else paste(lab, "(minimum \u2014 grows to fill empty space)")
+    fig_opts <- function(b) tagList(
+      checkboxInput(nm("autogrow"), "Auto-grow to fill empty space", !identical(b$autogrow, FALSE)),
+      checkboxInput(nm("nonumber"), "Don't number this one (logo or decoration)", isTRUE(b$nonumber)))
     file_row <- function(input_tag, a) div(class = "file-row", input_tag, thumb(a), if (!is.null(a)) span(class = "help", a$name))
     body <- switch(b$type,
       text = tagList(
@@ -210,22 +239,40 @@ server <- function(input, output, session) {
       figtext = tagList(
         file_row(fileInput(nm("file"), NULL, accept = c("image/*", ".tif", ".tiff", ".svg"), buttonLabel = "Choose image…", width = "100%"), A[[b$asset %||% ""]]),
         textAreaInput(nm("text"), "Text beside the image", b$text, rows = 3, width = "100%"),
-        sliderInput(nm("size"), "Image size", 20, 75, b$size, step = 5, post = "%", width = "100%"),
-        opts(selectInput(nm("side"), "Image position", c("Image left, text right" = "left", "Image right, text left" = "right"), b$side %||% "left", selectize = FALSE),
+        sliderInput(nm("size"), size_label(b, "Image size"), 20, 75, b$size, step = 5, post = "%", width = "100%"),
+        opts(fig_opts(b),
+             selectInput(nm("side"), "Image position", c("Image left, text right" = "left", "Image right, text left" = "right"), b$side %||% "left", selectize = FALSE),
              selectInput(nm("boxed"), "Text border", c("Dashed" = "dashed", "Solid" = "solid", "None" = "none"), b$boxed %||% "dashed", selectize = FALSE),
              textInput(nm("caption"), "Caption under the image", b$caption, width = "100%"))),
       figure = tagList(
         file_row(fileInput(nm("file"), NULL, accept = c("image/*", ".tif", ".tiff", ".svg"), buttonLabel = "Choose image…", width = "100%"), A[[b$asset %||% ""]]),
         textInput(nm("caption"), "Caption", b$caption, width = "100%", placeholder = "What should the viewer notice?"),
-        sliderInput(nm("size"), "Size", 20, 100, b$size, step = 5, post = "%", width = "100%"),
-        opts(checkboxInput(nm("nonumber"), "Don't number this one (logo or decoration)", isTRUE(b$nonumber)))),
+        sliderInput(nm("size"), size_label(b), 20, 100, b$size, step = 5, post = "%", width = "100%"),
+        opts(fig_opts(b))),
       figrow = tagList(
         div(class = "file-row", fileInput(nm("files"), NULL, multiple = TRUE, accept = c("image/*", ".tif", ".tiff"), buttonLabel = "Choose 2–4 images…", width = "100%"),
             tagList(lapply(unlist(b$assets), function(i) thumb(A[[i]], 44)))),
+        p(class = "help", "One figure made of several panels (A, B, C\u2026) sharing one caption and one figure number."),
         textInput(nm("caption"), "Caption", b$caption, width = "100%", placeholder = "(A) … (B) …"),
-        sliderInput(nm("size"), "Size", 30, 100, b$size, step = 5, post = "%", width = "100%"),
-        opts(numericInput(nm("n"), "Empty slots to show before images are added", b$n %||% 2, min = 2, max = 4, width = "100%"),
-             checkboxInput(nm("labels"), "Label panels A, B, C…", isTRUE(b$labels)))),
+        sliderInput(nm("size"), size_label(b), 30, 100, b$size, step = 5, post = "%", width = "100%"),
+        opts(fig_opts(b),
+             numericInput(nm("n"), "Empty slots to show before images are added", b$n %||% 2, min = 2, max = 4, width = "100%"),
+             checkboxInput(nm("labels"), "Label panels A, B, C…", isTRUE(b$labels)),
+             radioButtons(nm("label_color"), "Label color", c("Black" = "black", "White (for dark images)" = "white"),
+                          selected = b$label_color %||% "black", inline = TRUE))),
+      figpair = {
+        caps <- unlist(b$captions) %||% character(0)
+        nslots <- max(b$n %||% 2, length(unlist(b$assets)))
+        tagList(
+          div(class = "file-row", fileInput(nm("files"), NULL, multiple = TRUE, accept = c("image/*", ".tif", ".tiff"), buttonLabel = "Choose 2\u20133 images\u2026", width = "100%"),
+              tagList(lapply(unlist(b$assets), function(i) thumb(A[[i]], 44)))),
+          p(class = "help", "Pick the images in the order you want them, left to right. Each gets its own figure number and caption."),
+          lapply(seq_len(min(3, nslots)), function(k)
+            textInput(nm(paste0("cap", k)), sprintf("Caption for image %d", k), if (k <= length(caps)) caps[[k]] else "", width = "100%")),
+          sliderInput(nm("size"), size_label(b), 30, 100, b$size, step = 5, post = "%", width = "100%"),
+          opts(fig_opts(b),
+               numericInput(nm("n"), "Number of figures in the row", b$n %||% 2, min = 2, max = 3, width = "100%")))
+      },
       table = tagList(
         div(class = "file-row", fileInput(nm("file"), NULL, accept = c(".csv", ".xlsx", ".xls"), buttonLabel = "Choose CSV / Excel…", width = "100%"),
             if (!is.null(A[[b$asset %||% ""]])) span(class = "help", sprintf("%s (%d rows × %d columns)", A[[b$asset]]$name, nrow(A[[b$asset]]$data), ncol(A[[b$asset]]$data)))),
@@ -407,6 +454,7 @@ server <- function(input, output, session) {
     v <- input$drag_resize; b <- get_b(v$id); if (is.null(b)) return()
     rng <- SIZE_RANGE[[b$type]] %||% c(20, 100)
     set_f(v$id, "size", max(rng[1], min(rng[2], round(as.numeric(v$size) / 5) * 5)))
+    if (b$type %in% c("figure", "figrow", "figpair", "figtext")) set_f(v$id, "autogrow", FALSE)   # keep the size you dragged to
     bump_struct()
   })
 

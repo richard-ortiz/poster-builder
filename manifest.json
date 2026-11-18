@@ -2268,7 +2268,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "e8b487bc3695030906a8d61972ad6533"
+      "checksum": "e5439753d236210d5d57d7824c45b458"
     },
     "R/assets.R": {
       "checksum": "ea114e6c3c6e943f0e6a5c4c052ae4d0"
@@ -2277,19 +2277,19 @@
       "checksum": "a1d534708a52db1befd79a088bb5b04b"
     },
     "R/layout.R": {
-      "checksum": "6dc73d1461b9e16a61d8ea482090f6e9"
+      "checksum": "e8bdeefea2267abbe7cabe7c99ddbe53"
     },
     "R/magic.R": {
       "checksum": "99a758725a5b29dfee7260c42d2f178a"
     },
     "R/pptx.R": {
-      "checksum": "3465c93d19f6de86840854d5ef12110d"
+      "checksum": "445089420be421cc78d44d8d64a32961"
     },
     "R/preview.R": {
-      "checksum": "a2f77cbcd54b075fe34f72cbbf8b0b0b"
+      "checksum": "3a51283ffd08648a51f76065b98492f1"
     },
     "R/project.R": {
-      "checksum": "a7ba52d6530dbf730638c8c8267690c8"
+      "checksum": "ffbb5a0c1d9b65fcaf25727ef6fb2901"
     },
     "R/text.R": {
       "checksum": "899d0cb07543cce8fa84771e0ee486a8"

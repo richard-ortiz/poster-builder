@@ -63,7 +63,7 @@ block_is_empty <- function(b, assets) {
   switch(b$type,
     text = , callout = !nzchar(trimws(b$text %||% "")),
     figure = is.null(assets[[b$asset %||% ""]]),
-    figrow = !length(Filter(function(a) !is.null(assets[[a]]), unlist(b$assets))),
+    figrow = , figpair = !length(Filter(function(a) !is.null(assets[[a]]), unlist(b$assets))),
     table = is.null(assets[[b$asset %||% ""]]),
     qr = !nzchar(trimws(b$url %||% "")),
     equation = !nzchar(trimws(b$latex %||% "")),
@@ -80,7 +80,7 @@ flow_steps <- function(b) {
   st <- if (grepl("\n[ \t]*\n", txt)) gsub("\\s*\n\\s*", " ", strsplit(txt, "\n[ \t]*\n")[[1]]) else strsplit(txt, "\n")[[1]]
   st <- trimws(st); st[nzchar(st)]
 }
-SIZE_RANGE <- list(figure = c(20, 100), figrow = c(30, 100), table = c(30, 100), qr = c(15, 70),
+SIZE_RANGE <- list(figure = c(20, 100), figrow = c(30, 100), figpair = c(30, 100), table = c(30, 100), qr = c(15, 70),
                    equation = c(50, 250), figtext = c(20, 75))
 BOX_INSET <- 0.2
 
@@ -100,7 +100,7 @@ caption_paras <- function(b, label) {
 # block's own size setting (used to squeeze oversize figures).
 measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
   # `grow` (>= 1) lets figures expand into spare space in their panel (auto-adjust)
-  if (b$type %in% c("figure", "figrow", "figtext")) scale <- scale * grow
+  if (b$type %in% c("figure", "figrow", "figpair", "figtext") && !identical(b$autogrow, FALSE)) scale <- scale * grow
   pct <- min(1, max(0.15, (b$size %||% 100) / 100 * scale))
   csz <- caption_size(s)
   out <- list(type = b$type, id = b$id, empty = block_is_empty(b, assets))
@@ -183,17 +183,32 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
     out$capw <- max(fw, cw * 0.6)
     out$caph <- if (length(out$cap)) text_height(out$cap, csz, out$capw) + 0.12 else 0
     out$h <- fh + out$caph
-  } else if (b$type == "figrow") {
+  } else if (b$type %in% c("figrow", "figpair")) {
+    # Images in a row, scaled to one common height so the row spans the full width
     ids <- unlist(b$assets) %||% character(0)
     as <- lapply(ids, function(i) assets[[i]]); as <- Filter(Negate(is.null), as)
     n <- max(length(as), b$n %||% 2)
     asps <- vapply(seq_len(n), function(k) if (k <= length(as)) as[[k]]$w / as[[k]]$h else 4 / 3, numeric(1))
-    W <- cw * pct; g <- 0.25
+    W <- cw * pct; g <- if (b$type == "figpair") 0.3 else 0.15
     h <- (W - g * (n - 1)) / sum(asps)
-    out$fixed <- TRUE; out$items <- lapply(seq_len(n), function(k) list(asset = if (k <= length(as)) as[[k]] else NULL, w = h * asps[k], h = h))
-    out$fw <- W; out$fh <- h; out$labels <- isTRUE(b$labels)
-    out$cap <- caption_paras(b, b$.label); out$capsz <- csz; out$capw <- max(W, cw * 0.6)
-    out$caph <- if (length(out$cap)) text_height(out$cap, csz, out$capw) + 0.12 else 0
+    out$fixed <- TRUE; out$gap <- g
+    out$items <- lapply(seq_len(n), function(k) list(asset = if (k <= length(as)) as[[k]] else NULL, w = h * asps[k], h = h))
+    out$fw <- W; out$fh <- h; out$labels <- isTRUE(b$labels); out$label_color <- b$label_color %||% "black"
+    out$capsz <- csz
+    if (b$type == "figrow") {
+      out$cap <- caption_paras(b, b$.label); out$capw <- max(W, cw * 0.6)
+      out$caph <- if (length(out$cap)) text_height(out$cap, csz, out$capw) + 0.12 else 0
+    } else {
+      # each image has its own caption (and its own figure number), sized to the image width
+      caps <- unlist(b$captions) %||% character(0)
+      for (k in seq_len(n)) {
+        cp <- caption_paras(list(caption = if (k <= length(caps)) caps[[k]] else ""), if (length(b$.labels) >= k) b$.labels[[k]] else NULL)
+        out$items[[k]]$cap <- cp
+        out$items[[k]]$caph <- if (length(cp)) text_height(cp, csz, out$items[[k]]$w) + 0.12 else 0
+      }
+      out$cap <- list(); out$capw <- W
+      out$caph <- max(0, vapply(out$items, `[[`, numeric(1), "caph"))
+    }
     out$h <- h + out$caph
   } else if (b$type == "table") {
     a <- assets[[b$asset %||% ""]]
@@ -253,7 +268,7 @@ heading_metrics <- function(heading, w) {
 active_blocks <- function(sec, assets, keep_empty) {
   Filter(function(b) {
     if (!block_is_empty(b, assets)) return(TRUE)
-    keep_empty && b$type %in% c("figure", "figrow", "table")
+    keep_empty && b$type %in% c("figure", "figrow", "figpair", "table")
   }, sec$blocks %||% list())
 }
 
@@ -276,7 +291,13 @@ number_blocks <- function(proj, layout) {
       b <- sec$blocks[[j]]
       if (isTRUE(b$nonumber)) {
         # logos / decorative images: no "Figure N." label
-      } else if (b$type %in% c("figure", "figrow", "figtext") && isTRUE(proj$settings$number %||% TRUE)) {
+      } else if (b$type == "figpair" && isTRUE(proj$settings$number %||% TRUE)) {
+        # side-by-side figures: each image is its own numbered figure
+        ids <- unlist(b$assets) %||% character(0)
+        n <- max(length(Filter(function(a) !is.null(proj$assets[[a]]), ids)), b$n %||% 2)
+        has <- vapply(seq_len(n), function(k) k <= length(ids) && !is.null(proj$assets[[ids[k]]]), logical(1))
+        b$.labels <- lapply(seq_len(n), function(k) if (has[k] || isTRUE(proj$settings$keep_empty)) { fig <<- fig + 1; sprintf("Figure %d.", fig) } else NULL)
+      } else if (b$type %in% c("figure", "figrow", "figpair", "figtext") && isTRUE(proj$settings$number %||% TRUE)) {
         if (!block_is_empty(b, proj$assets) || isTRUE(proj$settings$keep_empty)) { fig <- fig + 1; b$.label <- sprintf("Figure %d.", fig) }
       } else if (b$type == "table" && isTRUE(proj$settings$number %||% TRUE)) {
         if (!block_is_empty(b, proj$assets) || isTRUE(proj$settings$keep_empty)) { tab <- tab + 1; b$.label <- sprintf("Table %d.", tab) }
@@ -359,6 +380,8 @@ compute_layout <- function(proj) {
   balance <- isTRUE(st$balance %||% TRUE)
   autofit <- isTRUE(st$autofit %||% TRUE) && balance
   vis <- function(k) isTRUE(proj$sections[[k]]$visible)
+  grow_on <- autofit && !identical(st$grow, FALSE)
+  used_scale <- 1
 
   # Build column plans: list of slots with visible keys
   plan_cols <- lapply(layout$cols, function(col) {
@@ -387,7 +410,7 @@ compute_layout <- function(proj) {
     sum(vapply(col_needs(col, w, s), `[[`, numeric(1), "h")) <= col_htot(col) + 1e-6
   }
 
-  try_size <- function(s, scale = 1, widths = w0) {
+  try_size <- function(s, scale = 1, widths = w0, route = FALSE) {
     res <- list(); ok <- TRUE; xs <- col_x(widths)
     for (i in seq_along(plan_cols)) {
       col <- plan_cols[[i]]
@@ -400,9 +423,21 @@ compute_layout <- function(proj) {
         # space stays reserved), rather than in proportion to content, which used to
         # leave the fullest panel with the biggest blank area
         if (sum(nh) <= Htot) {
+          L <- Htot - sum(nh)
           empty <- vapply(needs, function(nd) all(vapply(nd$pn, function(x) !length(x$measures), logical(1))), logical(1))
           wts <- ifelse(empty, 2, 1)
-          heights <- nh + (Htot - sum(nh)) * wts / sum(wts)
+          alloc <- rep(0, length(nh))
+          if (route && grow_on) {
+            # how much taller each slot could get if its figures grew to full width
+            cap <- vapply(seq_along(needs), function(k) {
+              nd <- needs[[k]]
+              hmax <- max(vapply(seq_along(nd$keys), function(j)
+                panel_need(proj$sections[[nd$keys[j]]], nd$pw, s, proj$assets, keep_empty, scale, 6)$h, numeric(1)))
+              max(0, hmax - nh[k])
+            }, numeric(1))
+            if (sum(cap) > 0) alloc <- pmin(cap, L * cap / sum(cap))
+          }
+          heights <- nh + alloc + (L - sum(alloc)) * wts / sum(wts)
         } else heights <- Htot * nh / sum(nh)
         if (sum(nh) > Htot + 1e-6) ok <- FALSE
       } else {
@@ -465,9 +500,17 @@ compute_layout <- function(proj) {
 
   # Local search: move width between columns so the emptiest column gets as full
   # as possible (figure-heavy columns fill up when widened, text columns when narrowed).
+  # How full column i would be at width w: with figure growth on, figures count at
+  # the size they could grow to (capped at a full column), so widening a
+  # figure-heavy column is recognised as a way to fill it.
   col_fill <- function(i, w, s) {
     col <- plan_cols[[i]]; if (!length(col$slots)) return(1)
-    sum(vapply(col_needs(col, w, s), `[[`, numeric(1), "h")) / col_htot(col)
+    g <- if (grow_on) 6 else 1
+    h <- sum(vapply(col$slots, function(sl) {
+      n <- length(sl); pw <- (w - PANEL_GAP * (n - 1)) / n
+      max(vapply(sl, function(k) panel_need(proj$sections[[k]], pw, s, proj$assets, keep_empty, 1, g)$h, numeric(1)))
+    }, numeric(1)))
+    min(1, h / col_htot(col))
   }
   refine_widths <- function(w, s) {
     n <- length(w); if (n < 2) return(w)
@@ -475,7 +518,7 @@ compute_layout <- function(proj) {
     if (all(vapply(seq_len(n), function(i) col_fits(i, w0[i], s), logical(1)))) w <- w0
     f <- vapply(seq_len(n), function(i) col_fill(i, w[i], s), numeric(1))
     # reward the emptiest column getting fuller; small penalty for drifting from the template
-    score <- function(f, w) if (any(f > 1 + 1e-6)) -Inf else min(f) + 0.01 * mean(f) - 0.012 * sum(abs(w - w0))
+    score <- function(f, w) min(f) + 0.01 * mean(f) - 0.012 * sum(abs(w - w0))
     best <- score(f, w)
     for (step in c(1, 0.5, 0.25)) {
       for (iter in 1:12) {
@@ -485,6 +528,7 @@ compute_layout <- function(proj) {
           if (wi > hi_w[i] || wj < lo_w[j]) next
           f2 <- f; f2[i] <- col_fill(i, wi, s); f2[j] <- col_fill(j, wj, s)
           w2 <- w; w2[i] <- wi; w2[j] <- wj
+          if (!col_fits(i, wi, s) || !col_fits(j, wj, s)) next      # must still fit at the chosen text size
           sc <- score(f2, w2)
           if (sc > best + 1e-4) { w[i] <- wi; w[j] <- wj; f <- f2; best <- sc; improved <- TRUE }
         }
@@ -523,36 +567,38 @@ compute_layout <- function(proj) {
   if (is.null(chosen)) {
     body <- smin
     # squeeze figures/tables progressively, then allow text down to the 20 pt floor (never smaller)
-    for (sc in c(0.9, 0.8, 0.7, 0.6, 0.5)) { r <- try_size(body, sc); if (r$ok) { chosen <- r; break } }
+    for (sc in c(0.9, 0.8, 0.7, 0.6, 0.5)) { r <- try_size(body, sc); if (r$ok) { chosen <- r; used_scale <- sc; break } }
     if (!is.null(chosen)) warnings <- c(warnings, sprintf("Figures and tables were shrunk to %d%% of their set size so everything fits. Consider cutting text.", round(sc * 100)))
     if (is.null(chosen) && smin > MIN_BODY) {
-      for (s2 in seq(smin - 1, MIN_BODY, by = -1)) { r <- try_size(s2, 0.5); if (r$ok) { chosen <- r; body <- s2; break } }
+      for (s2 in seq(smin - 1, MIN_BODY, by = -1)) { r <- try_size(s2, 0.5); if (r$ok) { chosen <- r; body <- s2; used_scale <- 0.5; break } }
       if (!is.null(chosen)) warnings <- c(warnings, sprintf("Text had to go down to %d pt, below your chosen minimum, to fit. Accepted PURC posters use about 24 pt body text; consider trimming.", body))
     }
     if (is.null(chosen)) {
-      chosen <- try_size(MIN_BODY, 0.5); body <- MIN_BODY
+      chosen <- try_size(MIN_BODY, 0.5); body <- MIN_BODY; used_scale <- 0.5
       warnings <- c(warnings, sprintf("Too much content to fit at a readable size (%d pt minimum). Some text runs past its panel. Please shorten text or remove a figure.", MIN_BODY))
     }
   }
 
-  # Place blocks within each panel. Leftover height is shared out as extra
-  # space between blocks (auto-adjust) instead of collecting at the bottom.
-  grow_figs <- autofit && !identical(st$grow, FALSE)
+  if (grow_on && balance) { rr <- try_size(body, used_scale, widths, route = TRUE); if (rr$ok || !chosen$ok) chosen <- rr }
+
+  # Place blocks within each panel. Figures grow into spare height first; only
+  # what is left becomes (modest) extra space between blocks.
+  grow_figs <- grow_on
   panels <- lapply(chosen$panels, function(p) {
     nd <- p$need
     # Let figures in this panel grow (up to full width) to use spare height
-    if (grow_figs && p$h - nd$h > 0.4 &&
-        any(vapply(nd$measures, function(m) m$type %in% c("figure", "figrow", "figtext"), logical(1)))) {
-      sec <- proj$sections[[p$key]]
-      need_g <- function(g) panel_need(sec, p$w, body, proj$assets, keep_empty, 1, g)
-      lo <- 1; hi <- 4
+    sec <- proj$sections[[p$key]]
+    can_grow <- any(vapply(sec$blocks, function(b) b$type %in% c("figure", "figrow", "figpair", "figtext") && !identical(b$autogrow, FALSE), logical(1)))
+    if (grow_figs && p$h - nd$h > 0.2 && can_grow) {
+      need_g <- function(g) panel_need(sec, p$w, body, proj$assets, keep_empty, used_scale, g)
+      lo <- 1; hi <- 6
       if (need_g(hi)$h <= p$h) lo <- hi else for (it in 1:8) { m <- (lo + hi) / 2; if (need_g(m)$h <= p$h) lo <- m else hi <- m }
       if (lo > 1.01) nd <- need_g(lo)
     }
     x0 <- p$x + PAD_X; y <- p$y + nd$head$h; cw <- nd$cw
     leftover <- max(0, p$h - nd$h)
     nb <- length(nd$measures)
-    extra_gap <- if (nb > 1) min(leftover / (nb - if (autofit) 1 else 0), if (autofit) 1.2 else 0.5) else 0
+    extra_gap <- if (nb > 1) min(leftover / (nb - if (autofit) 1 else 0), 0.6) else 0
     items <- list()
     for (m in nd$measures) {
       m$x <- x0; m$y <- y; m$w <- cw
@@ -565,7 +611,7 @@ compute_layout <- function(proj) {
   for (p in panels) if (p$overflow) warnings <- c(warnings, sprintf("'%s' is too full and may overflow its panel.", proj$sections[[p$key]]$heading))
   empties <- unlist(lapply(names(proj$sections), function(k) {
     sec <- proj$sections[[k]]; if (!isTRUE(sec$visible)) return(NULL)
-    n <- sum(vapply(sec$blocks, function(b) (b$type %in% c("figure", "figrow", "table") && block_is_empty(b, proj$assets)) ||
+    n <- sum(vapply(sec$blocks, function(b) (b$type %in% c("figure", "figrow", "figpair", "table") && block_is_empty(b, proj$assets)) ||
                                             (b$type == "figtext" && is.null(proj$assets[[b$asset %||% ""]])), logical(1)))
     if (n) sprintf("%s: %d empty slot%s", sec$heading, n, if (n > 1) "s" else "")
   }))
@@ -654,7 +700,7 @@ block_parts <- function(m) {
 block_visual_rect <- function(m) {
   cx <- m$x + m$w / 2
   switch(m$type,
-    figure = , figrow = , qr = , equation = list(x = cx - m$fw / 2, y = m$y, w = m$fw, h = m$fh, k = 2),
+    figure = , figrow = , figpair = , qr = , equation = list(x = cx - m$fw / 2, y = m$y, w = m$fw, h = m$fh, k = 2),
     table = list(x = cx - m$fw / 2, y = m$y + m$caph, w = m$fw, h = m$fh, k = 2),
     figtext = { p <- block_parts(m); c(p$img, list(k = if (m$side == "right") -1 else 1)) },
     NULL)

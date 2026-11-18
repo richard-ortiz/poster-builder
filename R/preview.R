@@ -94,15 +94,18 @@ preview_html <- function(proj, lay) {
         add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = body_align))
       } else if (m$type == "figure") {
         add(img_div(m$asset, cx - m$fw / 2, m$y, m$fw, m$fh)); cap(m$y + m$fh + 0.12)
-      } else if (m$type == "figrow") {
+      } else if (m$type %in% c("figrow", "figpair")) {
         x <- cx - m$fw / 2
         for (k in seq_along(m$items)) {
           it <- m$items[[k]]
           add(img_div(it$asset, x, m$y, it$w, it$h))
-          if (m$labels) add(sprintf('<div style="%sfont:bold %.1fpx Arial">%s</div>', box_style(x + 0.05, m$y + 0.02, 1), fpx(lay$body * 1.3), LETTERS[k]))
-          x <- x + it$w + 0.25
+          if (m$type == "figrow" && m$labels)
+            add(sprintf('<div style="%sfont:bold %.1fpx Arial;color:%s">%s</div>', box_style(x + 0.08, m$y + 0.04, 1), fpx(lay$body * 1.3),
+                        if (identical(m$label_color, "white")) "#fff" else "#000", LETTERS[k]))
+          if (m$type == "figpair" && length(it$cap)) add(text_div(it$cap, m$capsz, x, m$y + m$fh + 0.12, it$w))
+          x <- x + it$w + m$gap
         }
-        cap(m$y + m$fh + 0.12)
+        if (m$type == "figrow") cap(m$y + m$fh + 0.12)
       } else if (m$type == "table") {
         cap(m$y)
         if (is.null(m$asset)) add(img_div(NULL, cx - m$fw / 2, m$y + m$caph, m$fw, m$fh, "table"))
@@ -120,6 +123,8 @@ preview_html <- function(proj, lay) {
     v <- block_visual_rect(m)
     if (!is.null(v)) {
       size <- (proj$sections[[p$key]]$blocks[[which(vapply(proj$sections[[p$key]]$blocks, `[[`, "", "id") == m$id)]]$size) %||% 100
+      # figures may have grown: start the drag from the width actually shown, as % of the panel
+      if (m$type %in% c("figure", "figrow", "figpair", "figtext", "table", "qr")) size <- round(100 * v$w / m$w)
       add(sprintf('<div class="phandle" title="Drag to resize" data-id="%s" data-k="%d" data-size="%s" data-fw="%.2f" data-fh="%.2f" data-fx="%.2f" data-fy="%.2f" style="left:%s;top:%s"></div>',
                   m$id, as.integer(v$k), size, v$w * PX, v$h * PX, v$x * PX, v$y * PX, px(if (v$k < 0) v$x + 0.05 else v$x + v$w - 0.35), px(v$y + v$h - 0.35)))
     }

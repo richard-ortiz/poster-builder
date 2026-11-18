@@ -4,23 +4,29 @@
 # ---------------------------------------------------------------------------
 
 BLOCK_TYPES <- c("Text" = "text", "Subheading" = "subheading", "Figure" = "figure",
-                 "Figure + side text" = "figtext", "Figure row (side-by-side)" = "figrow",
-                 "Flow chart (steps with arrows)" = "flow", "Table (CSV / Excel)" = "table",
-                 "Key-finding callout" = "callout", "QR code" = "qr", "Equation (LaTeX)" = "equation")
+                 "Side-by-side figures (own captions)" = "figpair",
+                 "Multi-panel figure (A, B\u2026 with one caption)" = "figrow",
+                 "Figure + side text" = "figtext", "Flow chart (steps with arrows)" = "flow",
+                 "Table (CSV / Excel)" = "table", "Key-finding callout" = "callout",
+                 "QR code" = "qr", "Equation (LaTeX)" = "equation")
 
 new_block <- function(type, ...) {
   b <- switch(type,
     text     = list(text = "", keep_lines = FALSE, boxed = "none"),
     subheading = list(text = "", style = "box", italic = TRUE),
     flow     = list(steps = "", caption = ""),
-    figtext  = list(asset = NULL, size = 50, side = "left", text = "", boxed = "dashed", caption = "", keep_lines = FALSE),
-    figure   = list(asset = NULL, size = 100, caption = ""),
-    figrow   = list(assets = list(), n = 2, size = 100, caption = "", labels = TRUE),
+    figtext  = list(asset = NULL, size = 50, side = "left", text = "", boxed = "dashed", caption = "", keep_lines = FALSE, nonumber = FALSE, autogrow = TRUE),
+    figure   = list(asset = NULL, size = 100, caption = "", nonumber = FALSE, autogrow = TRUE),
+    figrow   = list(assets = list(), n = 2, size = 100, caption = "", labels = TRUE, label_color = "black", nonumber = FALSE, autogrow = TRUE),
+    figpair  = list(assets = list(), n = 2, size = 100, captions = list("", "", ""), nonumber = FALSE, autogrow = TRUE),
     table    = list(asset = NULL, size = 100, caption = "", decimals = 2),
     callout  = list(title = "Key finding", text = ""),
     qr       = list(url = "", label = "Scan for the full paper", size = 35, asset = NULL),
     equation = list(latex = "", size = 100, asset = NULL))
-  modifyList(c(list(id = new_id("b"), type = type), b), list(...))
+  b <- c(list(id = new_id("b"), type = type), b)
+  args <- list(...)
+  for (nm in names(args)) b[nm] <- list(args[[nm]])   # plain replacement (modifyList would merge list fields)
+  b
 }
 
 default_project <- function() {
@@ -47,8 +53,8 @@ SECTION_TIPS <- c(
   conclusion = "What the results mean and what comes next. Short paragraphs or bullets.",
   ack = "Funding sources, collaborators and facilities. Logos are fine here (tick 'Don't number').",
   refs = "A few key citations, one per line.")
-QUICK_TYPES <- c("Text" = "text", "Figure" = "figure", "Subheading" = "subheading", "Flow chart" = "flow",
-                 "Table" = "table", "Figure + text" = "figtext")
+QUICK_TYPES <- c("Text" = "text", "Figure" = "figure", "Side-by-side figures" = "figpair", "Subheading" = "subheading",
+                 "Flow chart" = "flow", "Table" = "table", "Figure + text" = "figtext")
 
 PLACE_CHOICES <- unlist(lapply(SECTION_KEYS, function(k)
   setNames(paste0(c("above:", "below:"), k), paste(c("Above", "Below"), SECTION_DEFAULT_HEADINGS[[k]]))))
