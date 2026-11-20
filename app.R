@@ -137,11 +137,11 @@ server <- function(input, output, session) {
     on("down", function(v) move_block(id, +1))
     on("del",  function(v) remove_block(id))
     fields <- switch(b$type,
-      text = c("text", "keep_lines", "boxed"), subheading = c("text", "style", "italic"), flow = c("steps", "caption"),
+      text = c("text", "keep_lines", "boxed", "align"), subheading = c("text", "style", "italic"), flow = c("steps", "caption"),
       figure = c("caption", "nonumber", "autogrow"), figrow = c("caption", "n", "labels", "label_color", "nonumber", "autogrow"),
       figpair = c("n", "nonumber", "autogrow"),
-      figtext = c("text", "caption", "side", "text_boxes", "boxed", "keep_lines", "nonumber", "autogrow"),
-      table = c("caption", "source", "header_mode"), refs = c("dois", "text", "sort"), callout = c("title", "text"), qr = c("label"), character(0))
+      figtext = c("text", "caption", "side", "text_boxes", "boxed", "keep_lines", "nonumber", "autogrow", "align"),
+      table = c("caption", "source", "header_mode"), refs = c("dois", "text", "sort", "align"), callout = c("title", "text", "align"), qr = c("label"), character(0))
     for (f in fields) local({
       ff <- f; on(ff, function(v) {
         if (identical(get_b(id)[[ff]], v)) return()
@@ -241,6 +241,9 @@ server <- function(input, output, session) {
     id <- b$id; nm <- function(f) paste0(id, "_", f)
     A <- S$proj$assets
     opts <- function(...) tags$details(class = "opts", tags$summary("More options"), div(class = "opts-body", ...))
+    align_row <- function(b, default = "just") div(class = "align-row",
+      radioButtons(nm("align"), "Alignment", c("Justified" = "just", "Left" = "l", "Center" = "ctr", "Right" = "r"),
+                   selected = if (nzchar(b$align %||% "")) b$align else default, inline = TRUE))
     size_label <- function(b, lab = "Size") if (identical(b$autogrow, FALSE)) paste(lab, "(fixed)") else paste(lab, "(minimum \u2014 grows to fill empty space)")
     fig_opts <- function(b) tagList(
       checkboxInput(nm("autogrow"), "Auto-grow to fill empty space", !identical(b$autogrow, FALSE)),
@@ -249,6 +252,7 @@ server <- function(input, output, session) {
     body <- switch(b$type,
       text = tagList(
         textAreaInput(nm("text"), NULL, b$text, rows = 5, width = "100%", placeholder = "Type or paste text here…"),
+        align_row(b),
         opts(checkboxInput(nm("keep_lines"), "Keep every line break (lists, references)", isTRUE(b$keep_lines)),
              selectInput(nm("boxed"), "Border", c("No border" = "none", "Dashed border" = "dashed", "Solid border" = "solid"), b$boxed %||% "none", selectize = FALSE))),
       subheading = tagList(
@@ -264,6 +268,7 @@ server <- function(input, output, session) {
         file_row(fileInput(nm("file"), NULL, accept = c("image/*", ".tif", ".tiff", ".svg"), buttonLabel = "Choose image…", width = "100%"), A[[b$asset %||% ""]]),
         textAreaInput(nm("text"), "Text beside the image", b$text, rows = 3, width = "100%",
                       placeholder = "One box: type normally.  Separate boxes: one line per box (or leave a blank line between boxes)."),
+        align_row(b),
         div(class = "inline-pair",
           radioButtons(nm("text_boxes"), "Text style", c("One text box" = "one", "A separate box for each line" = "each"),
                        selected = b$text_boxes %||% "one", inline = TRUE),
@@ -327,11 +332,13 @@ server <- function(input, output, session) {
         actionButton(nm("fetch"), "Fill in from DOIs", icon = icon("wand-magic-sparkles"), class = "btn-outline-primary btn-sm"),
         textAreaInput(nm("text"), "References (APA 7th edition, one per line)", b$text %||% "", rows = 6, width = "100%",
                       placeholder = "Filled in from your DOIs, or type your own:\nYoung, L. J., & Wang, Z. (2004). The neurobiology of pair bonding. *Nature Neuroscience, 7*(10), 1048\u20131054. https://doi.org/10.1038/nn1327"),
+        align_row(b, default = "l"),
         { tips <- reference_tips(b); if (length(tips)) div(class = "ref-tips", lapply(tips, function(t) div(icon("lightbulb"), " ", t))) },
         opts(checkboxInput(nm("sort"), "Sort alphabetically by first author (APA)", !identical(b$sort, FALSE)),
              p(class = "help", "Use *asterisks* for italics (journal name and volume). In your poster text, cite as (Young & Wang, 2004)."))),
       callout = tagList(
         textAreaInput(nm("text"), NULL, b$text, rows = 3, width = "100%", placeholder = "Your take-home message in one or two sentences"),
+        align_row(b),
         opts(textInput(nm("title"), "Callout title", b$title, width = "100%"))),
       qr = tagList(
         textInput(nm("url"), "Link", b$url, width = "100%", placeholder = "https://doi.org/…"),

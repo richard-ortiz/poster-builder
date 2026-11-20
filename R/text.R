@@ -183,7 +183,7 @@ paras_html <- function(paras, size_px, color = "#000") {
     }, character(1)), collapse = "")
     sty <- sprintf("margin:0 0 %.2fpx 0;", size_px * PARA_SPACE)
     if (isTRUE(p$hang))
-      return(sprintf('<p style="%spadding-left:%.2fpx;text-indent:-%.2fpx;text-align:left">%s</p>', sty, HANG_IN * PX, HANG_IN * PX, inner))
+      return(sprintf('<p style="%spadding-left:%.2fpx;text-indent:-%.2fpx">%s</p>', sty, HANG_IN * PX, HANG_IN * PX, inner))
     if (isTRUE(p$bullet))
       sprintf('<p style="%spadding-left:%.2fpx;text-indent:-%.2fpx">•&nbsp;%s</p>', sty, size_px * 1.1, size_px * 1.1, inner)
     else sprintf('<p style="%s">%s</p>', sty, inner)

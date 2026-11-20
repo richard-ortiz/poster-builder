@@ -94,6 +94,8 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
   back <- character(0); front <- character(0)
   keep_empty <- isTRUE(proj$settings$keep_empty)
   body_align <- if (isTRUE(lay$justify)) "just" else "l"
+  # a block's own alignment (just / l / ctr / r) wins over the poster default
+  al <- function(m, default = body_align) if (nzchar(m$align %||% "")) m$align else default
 
   add_img <- function(a, x, y, w, h) {
     doc <<- officer::ph_with(doc, officer::external_img(asset_path(a, asset_dir), width = w, height = h),
@@ -123,9 +125,9 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
       cx <- m$x + m$w / 2
       if (m$type == "text") {
         if (m$boxed != "none") back <- c(back, frame_xml(m$x, m$y, m$w, m$h, m$boxed))
-        front <- c(front, shape_xml("Text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = body_align))
+        front <- c(front, shape_xml("Text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = al(m)))
       } else if (m$type == "refs") {
-        front <- c(front, shape_xml("References", m$x, m$y, m$w, m$h + 0.1, paras = m$paras, size = m$size, align = "l"))
+        front <- c(front, shape_xml("References", m$x, m$y, m$w, m$h + 0.1, paras = m$paras, size = m$size, align = al(m, "l")))
       } else if (m$type == "subheading") {
         st <- m$style
         front <- c(front, shape_xml("Subheading", m$x, m$y, m$w, m$h, geom = if (st == "plain") "rect" else "roundRect",
@@ -148,16 +150,16 @@ build_pptx <- function(proj, lay, asset_dir, template, out_file) {
         if (length(m$paras)) {
           t <- pr$text
           if (m$boxed != "none") back <- c(back, frame_xml(t$x, t$y, t$w, t$h, m$boxed))
-          front <- c(front, shape_xml("Side text", t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = body_align))
+          front <- c(front, shape_xml("Side text", t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset + 0.1, paras = m$paras, size = lay$body, align = al(m)))
         }
         for (t in pr$boxes %||% list()) {
           if (m$boxed != "none") back <- c(back, frame_xml(t$x, t$y, t$w, t$h, m$boxed))
           front <- c(front, shape_xml("Side text box", t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset + 0.1,
-                                      paras = t$paras, size = lay$body, align = "l", anchor = "ctr"))
+                                      paras = t$paras, size = lay$body, align = al(m), anchor = "ctr"))
         }
       } else if (m$type == "callout") {
         back <- c(back, shape_xml("Callout box", m$x, m$y, m$w, m$h, geom = "roundRect", fill = "FBE7EA", line = NIU_RED, line_w = 3, adj = round(0.2 / min(m$w, m$h) * 1e5)))
-        front <- c(front, shape_xml("Callout text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.05, paras = m$paras, size = lay$body, align = body_align))
+        front <- c(front, shape_xml("Callout text", m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, m$h - 2 * m$inset + 0.05, paras = m$paras, size = lay$body, align = al(m)))
       } else if (m$type == "figure") {
         fx <- cx - m$fw / 2
         if (is.null(m$asset)) front <- c(front, placeholder_xml(fx, m$y, m$fw, m$fh)) else add_img(m$asset, fx, m$y, m$fw, m$fh)

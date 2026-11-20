@@ -46,6 +46,8 @@ preview_html <- function(proj, lay) {
   proj <- lay$proj %||% proj   # includes "(cont.)" panels and figure numbers
   out <- character(0)
   body_align <- if (isTRUE(lay$justify)) "justify" else "left"
+  css_al <- c(just = "justify", l = "left", ctr = "center", r = "right")
+  al <- function(m, default = body_align) if (nzchar(m$align %||% "")) unname(css_al[m$align]) else default
   add <- function(...) out <<- c(out, ...)
   # background + NIU logo (from the template master)
   add(sprintf('<div style="position:absolute;left:0;top:%s;width:100%%;height:%s;background:linear-gradient(#fff,#%s)"></div>', px(13.3), px(POSTER_H - 13.3), NIU_RED))
@@ -71,9 +73,9 @@ preview_html <- function(proj, lay) {
       cap <- function(y) if (length(m$cap)) add(text_div(m$cap, m$capsz, max(m$x, cx - m$capw / 2), y, m$capw, align = if (m$type == "qr") "center" else "left"))
       if (m$type == "text") {
         if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(m$x, m$y, m$w, m$h)))
-        add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = body_align))
+        add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = al(m)))
       } else if (m$type == "refs") {
-        add(text_div(m$paras, m$size, m$x, m$y, m$w, align = "left"))
+        add(text_div(m$paras, m$size, m$x, m$y, m$w, align = al(m, "left")))
       } else if (m$type == "subheading") {
         cls <- paste0("psub psub-", m$style)
         add(sprintf('<div class="%s" style="%sfont-size:%.2fpx;padding:0 %s;">%s</div>', cls, box_style(m$x, m$y, m$w, m$h), fpx(m$size), px(m$inset),
@@ -90,17 +92,17 @@ preview_html <- function(proj, lay) {
         if (length(m$paras)) {
           t <- pr$text
           if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(t$x, t$y, t$w, t$h)))
-          add(text_div(m$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, align = body_align))
+          add(text_div(m$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, align = al(m)))
         }
         for (t in pr$boxes %||% list()) {
           if (m$boxed != "none") add(sprintf('<div class="pframe %s" style="%s"></div>', m$boxed, box_style(t$x, t$y, t$w, t$h)))
-          add(text_div(t$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset, align = "left",
+          add(text_div(t$paras, lay$body, t$x + m$inset, t$y + m$inset, t$w - 2 * m$inset, t$h - 2 * m$inset, align = al(m),
                        extra = "display:flex;flex-direction:column;justify-content:center;"))
         }
       }
       else if (m$type == "callout") {
         add(sprintf('<div class="pcallout" style="%s"></div>', box_style(m$x, m$y, m$w, m$h)))
-        add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = body_align))
+        add(text_div(m$paras, lay$body, m$x + m$inset, m$y + m$inset, m$w - 2 * m$inset, align = al(m)))
       } else if (m$type == "figure") {
         add(img_div(m$asset, cx - m$fw / 2, m$y, m$fw, m$fh)); cap(m$y + m$fh + 0.12)
       } else if (m$type %in% c("figrow", "figpair")) {

@@ -104,7 +104,7 @@ measure_block <- function(b, s, cw, assets, scale = 1, grow = 1) {
   if (b$type %in% c("figure", "figrow", "figpair", "figtext") && !identical(b$autogrow, FALSE)) scale <- scale * grow
   pct <- min(1, max(0.15, (b$size %||% 100) / 100 * scale))
   csz <- caption_size(s)
-  out <- list(type = b$type, id = b$id, empty = block_is_empty(b, assets))
+  out <- list(type = b$type, id = b$id, empty = block_is_empty(b, assets), align = b$align %||% "")
   if (b$type %in% c("text")) {
     out$paras <- parse_rich(b$text, isTRUE(b$keep_lines)); out$fixed <- FALSE
     out$boxed <- b$boxed %||% "none"

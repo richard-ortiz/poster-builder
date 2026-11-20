@@ -152,3 +152,7 @@ details.preview-help summary{cursor:pointer}
 .inline-pair .form-group{margin-bottom:6px}
 .ref-tips{font-size:.78rem;color:#7a5a00;background:#fffaf0;border:1px solid #f3e1b0;border-radius:6px;padding:4px 8px;margin:-2px 0 6px}
 .ref-tips div{margin:2px 0}
+.align-row .form-group{margin:-2px 0 4px}
+.align-row .control-label{font-size:.8rem;color:#777;margin-right:6px}
+.align-row .shiny-options-group{display:inline-flex;gap:2px}
+.align-row .radio-inline{font-size:.82rem;margin-right:8px}
